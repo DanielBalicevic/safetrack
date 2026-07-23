@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# iCloud conflict copies ("file 2.dart")
+* [0-9].*
+
+# Node
+node_modules/
+
+# PlatformIO
+.pio/
+
+# Firebase
+*-debug.log
+.runtimeconfig.json
+
+# Secrets (see the matching .example files)
+**/.env
+firmware/src/config.h
+app/ios/Runner/GoogleService-Info.plist
+app/android/app/google-services.json
+simulator/sa-key.json
+
+# Load test output
+simulator/load-*.csv

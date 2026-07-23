@@ -1,0 +1,66 @@
+rules_version = '2';
+
+// Caregivers can only access their own data. Telemetry and alerts are written
+// exclusively by the Cloud Functions through the Admin SDK, which bypasses
+// these rules, so clients are denied those writes. The device never talks to
+// Firestore directly; it posts to the ingestTelemetry function.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    match /devices/{deviceId} {
+      function isUnclaimed() {
+        return !("ownerId" in resource.data) || resource.data.ownerId == '';
+      }
+
+      // Only the owner can read a device, so the pairing code is never exposed.
+      allow read: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      // Devices are provisioned with the Admin SDK only. Allowing clients to
+      // create them would let a user claim an unprovisioned id and later
+      // receive the real device's telemetry.
+      allow create: if false;
+
+      // The owner can update the device. An unclaimed device can be claimed by
+      // sending the matching pairing code, which the client never reads.
+      allow update: if isSignedIn()
+                    && (resource.data.ownerId == request.auth.uid
+                        || (isUnclaimed()
+                            && request.resource.data.ownerId == request.auth.uid
+                            && request.resource.data.pairingCode == resource.data.pairingCode));
+      allow delete: if isSignedIn() && resource.data.ownerId == request.auth.uid;
+
+      match /telemetry/{pointId} {
+        allow read: if isSignedIn()
+                    && get(/databases/$(database)/documents/devices/$(deviceId)).data.ownerId == request.auth.uid;
+        allow write: if false;
+      }
+
+      // Legacy single geofence, kept as a backup after migration to /geofences.
+      match /geofence/{docId} {
+        allow read, write: if isSignedIn()
+                    && get(/databases/$(database)/documents/devices/$(deviceId)).data.ownerId == request.auth.uid;
+      }
+
+      match /geofences/{zoneId} {
+        allow read, write: if isSignedIn()
+                    && get(/databases/$(database)/documents/devices/$(deviceId)).data.ownerId == request.auth.uid;
+      }
+    }
+
+    // The device owner can read alerts and mark them as resolved.
+    match /alerts/{alertId} {
+      allow read, update: if isSignedIn()
+                    && get(/databases/$(database)/documents/devices/$(resource.data.deviceId)).data.ownerId == request.auth.uid;
+      allow create, delete: if false;
+    }
+  }
+}
