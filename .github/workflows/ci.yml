@@ -1,0 +1,50 @@
+name: CI
+
+# Backend unit tests and Flutter analysis/tests on every push and pull request.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (Cloud Functions)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: functions
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: functions/package-lock.json
+
+      - run: npm ci
+      - run: npm test
+
+  app:
+    name: App (Flutter)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+
+      # secrets.dart is not committed; the example file is enough to compile.
+      - name: Create secrets.dart from the example
+        run: cp lib/config/secrets.example.dart lib/config/secrets.dart
+
+      - run: flutter pub get
+      - run: flutter analyze lib
+      - run: flutter test
